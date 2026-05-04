@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>단청 물결 | 국가유산 인터랙티브</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700;900&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;background:#0a1628;font-family:'Noto Sans KR',sans-serif;cursor:crosshair}
+#mainCanvas{position:fixed;top:0;left:0;width:100vw;height:100vh}
+#webcamSmall{position:fixed;bottom:20px;right:20px;width:240px;height:180px;border-radius:12px;border:2px solid rgba(201,168,76,0.3);z-index:10;transform:scaleX(-1);object-fit:cover}
+.top-nav{position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;justify-content:space-between;align-items:center;padding:12px 24px;background:rgba(10,22,40,0.85);backdrop-filter:blur(10px);border-bottom:1px solid rgba(201,168,76,0.2)}
+.back-btn{color:#C9A84C;text-decoration:none;font-family:'Noto Serif KR',serif;font-size:1.1rem}
+.back-btn:hover{color:#FFD700}
+.page-title{color:#C9A84C;font-family:'Noto Serif KR',serif;font-size:1.2rem;letter-spacing:4px}
+.hand-status{position:fixed;top:70px;right:20px;z-index:10;padding:8px 16px;border-radius:20px;font-size:.8rem;backdrop-filter:blur(10px)}
+.hand-status.detected{background:rgba(62,122,76,0.4);color:#7FFF7F;border:1px solid rgba(62,122,76,0.5)}
+.hand-status.waiting{background:rgba(199,62,58,0.3);color:#FF9999;border:1px solid rgba(199,62,58,0.3)}
+.grabbed-indicator{position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:10;color:#FFD700;font-family:'Noto Serif KR',serif;font-size:1.2rem;opacity:0;transition:opacity .3s;text-shadow:0 0 15px rgba(201,168,76,0.6)}
+.grabbed-indicator.show{opacity:1}
+.pattern-counter{position:fixed;top:70px;left:20px;z-index:10;color:rgba(201,168,76,0.7);font-size:.85rem;background:rgba(10,22,40,0.7);padding:6px 14px;border-radius:8px;border:1px solid rgba(201,168,76,0.15)}
+/* 업로드 UI */
+.upload-panel{position:fixed;left:20px;bottom:20px;z-index:10;background:rgba(10,22,40,0.9);border:1px solid rgba(201,168,76,0.2);border-radius:12px;padding:16px 20px;backdrop-filter:blur(10px);max-width:320px}
+.upload-panel h3{color:#C9A84C;font-family:'Noto Serif KR',serif;margin-bottom:10px;font-size:.95rem}
+.upload-panel p{color:rgba(245,240,232,0.5);font-size:.75rem;margin-bottom:10px;line-height:1.4}
+.upload-area{border:2px dashed rgba(201,168,76,0.3);border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:all .3s;margin-bottom:10px}
+.upload-area:hover{border-color:#C9A84C;background:rgba(201,168,76,0.05)}
+.upload-area .icon{font-size:2rem;margin-bottom:6px}
+.upload-area .text{color:rgba(201,168,76,0.6);font-size:.8rem}
+.upload-area input{display:none}
+.loaded-patterns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.loaded-patterns .thumb{width:40px;height:40px;border-radius:6px;border:1px solid rgba(201,168,76,0.2);object-fit:cover;cursor:pointer}
+.loaded-patterns .thumb:hover{border-color:#C9A84C}
+.loaded-patterns .remove-badge{position:absolute;top:-4px;right:-4px;width:14px;height:14px;background:#C73E3A;border-radius:50%;color:#fff;font-size:.6rem;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.thumb-wrap{position:relative;display:inline-block}
+.info-text{color:rgba(245,240,232,0.6);font-size:.8rem;line-height:1.5}
+.info-text b{color:#C9A84C}
+.reset-btn{background:rgba(199,62,58,0.2);border:1px solid rgba(199,62,58,0.3);color:#FF9999;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.75rem;margin-top:8px}
+.reset-btn:hover{background:rgba(199,62,58,0.4)}
+</style>
+</head>
+<body>
+<nav class="top-nav">
+  <a href="../index.html" class="back-btn">← 메인</a>
+  <div class="page-title">단청 물결</div>
+  <div style="width:60px"></div>
+</nav>
+
+<canvas id="mainCanvas"></canvas>
+<video id="webcamSmall" autoplay playsinline muted></video>
+
+<div class="hand-status waiting" id="handStatus">🖐 손을 보여주세요</div>
+<div class="grabbed-indicator" id="grabbedInd">✨ 문양을 잡았습니다!</div>
+<div class="pattern-counter" id="patternCounter">건진 문양: 0</div>
+
+<div class="upload-panel">
+  <h3>🎨 단청 문양 업로드</h3>
+  <p>사용할 단청 문양 이미지를 업로드하세요 (PNG/JPG). 여러 장 가능합니다.</p>
+  <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+    <div class="icon">📂</div>
+    <div class="text">클릭하거나 드래그하여 업로드</div>
+    <input type="file" id="fileInput" accept="image/*" multiple>
+  </div>
+  <div class="loaded-patterns" id="loadedPatterns"></div>
+  <div class="info-text">
+    <b>조작법:</b> 손을 쥐면 문양을 잡고, 펴면 놓습니다.<br>
+    화면 상단으로 올리면 문양을 건진 것으로 집계됩니다.
+  </div>
+  <button class="reset-btn" onclick="resetPatterns()">🔄 문양 초기화</button>
+</div>
+
+<script>
+const canvas=document.getElementById('mainCanvas');
+const ctx=canvas.getContext('2d');
+const video=document.getElementById('webcamSmall');
+let W,H;
+function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight}
+resize();window.addEventListener('resize',resize);
+
+// ===== 이미지 기반 패턴 시스템 =====
+const uploadedImages=[];  // HTMLImageElement 배열
+const patterns=[];
+let grabbedPattern=null, grabCount=0;
+let handPos={x:0,y:0,visible:false,grabbing:false};
+
+class FloatingPattern{
+  constructor(img,x,y){
+    this.img=img;
+    this.x=x; this.y=y; this.baseY=y;
+    this.w=80+Math.random()*60; this.h=this.w*(img.height/img.width)||this.w;
+    this.rotation=Math.random()*Math.PI*2;
+    this.rotSpeed=(Math.random()-0.5)*0.005;
+    this.phase=Math.random()*Math.PI*2;
+    this.driftX=(Math.random()-0.5)*0.3;
+    this.bobAmp=8+Math.random()*12;
+    this.bobSpeed=0.5+Math.random()*0.5;
+    this.grabbed=false;
+    this.alpha=0.92;
+  }
+  draw(ctx){
+    ctx.save();
+    ctx.translate(this.x,this.y);
+    ctx.rotate(this.rotation);
+    ctx.globalAlpha=this.alpha;
+    ctx.shadowColor='rgba(0,0,0,0.3)';ctx.shadowBlur=15;ctx.shadowOffsetY=5;
+    ctx.drawImage(this.img,-this.w/2,-this.h/2,this.w,this.h);
+    ctx.restore();
+  }
+  update(){
+    if(!this.grabbed){
+      this.phase+=0.02*this.bobSpeed;
+      this.y=this.baseY+Math.sin(this.phase)*this.bobAmp;
+      this.x+=this.driftX;
+      this.rotation+=this.rotSpeed;
+      if(this.x<-this.w)this.x=W+this.w;
+      if(this.x>W+this.w)this.x=-this.w;
+    }
+  }
+}
+
+function spawnPatternsFromImages(){
+  patterns.length=0;
+  if(uploadedImages.length===0)return;
+  const count=Math.max(8,uploadedImages.length*3);
+  for(let i=0;i<count;i++){
+    const img=uploadedImages[i%uploadedImages.length];
+    patterns.push(new FloatingPattern(img, Math.random()*W, H*0.3+Math.random()*H*0.45));
+  }
+}
+
+// ===== 파일 업로드 처리 =====
+const fileInput=document.getElementById('fileInput');
+const uploadArea=document.getElementById('uploadArea');
+
+fileInput.addEventListener('change',e=>{
+  Array.from(e.target.files).forEach(file=>{
+    if(!file.type.startsWith('image/'))return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const img=new Image();
+      img.onload=()=>{
+        uploadedImages.push(img);
+        renderThumbnails();
+        spawnPatternsFromImages();
+      };
+      img.src=ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  fileInput.value='';
+});
+
+// Drag & Drop
+uploadArea.addEventListener('dragover',e=>{e.preventDefault();uploadArea.style.borderColor='#C9A84C';uploadArea.style.background='rgba(201,168,76,0.08)'});
+uploadArea.addEventListener('dragleave',()=>{uploadArea.style.borderColor='';uploadArea.style.background=''});
+uploadArea.addEventListener('drop',e=>{
+  e.preventDefault();uploadArea.style.borderColor='';uploadArea.style.background='';
+  Array.from(e.dataTransfer.files).forEach(file=>{
+    if(!file.type.startsWith('image/'))return;
+    const reader=new FileReader();
+    reader.onload=ev=>{const img=new Image();img.onload=()=>{uploadedImages.push(img);renderThumbnails();spawnPatternsFromImages()};img.src=ev.target.result};
+    reader.readAsDataURL(file);
+  });
+});
+
+function renderThumbnails(){
+  const cont=document.getElementById('loadedPatterns');
+  cont.innerHTML='';
+  uploadedImages.forEach((img,i)=>{
+    const wrap=document.createElement('div');wrap.className='thumb-wrap';
+    const thumb=document.createElement('img');thumb.className='thumb';thumb.src=img.src;
+    const rm=document.createElement('div');rm.className='remove-badge';rm.textContent='✕';
+    rm.onclick=()=>{uploadedImages.splice(i,1);renderThumbnails();spawnPatternsFromImages()};
+    wrap.appendChild(thumb);wrap.appendChild(rm);cont.appendChild(wrap);
+  });
+}
+
+function resetPatterns(){
+  uploadedImages.length=0;patterns.length=0;
+  document.getElementById('loadedPatterns').innerHTML='';
+  grabCount=0;document.getElementById('patternCounter').textContent='건진 문양: 0';
+}
+
+// ===== 물결 & 리플 =====
+const ripples=[];
+class Ripple{
+  constructor(x,y,s=1){this.x=x;this.y=y;this.radius=0;this.maxR=150*s;this.alpha=0.4*s;this.spd=2+s}
+  update(){this.radius+=this.spd;this.alpha*=0.97;return this.alpha>0.01&&this.radius<this.maxR}
+  draw(ctx){ctx.beginPath();ctx.arc(this.x,this.y,this.radius,0,Math.PI*2);ctx.strokeStyle=`rgba(100,180,255,${this.alpha})`;ctx.lineWidth=2;ctx.stroke();ctx.beginPath();ctx.arc(this.x,this.y,this.radius*.7,0,Math.PI*2);ctx.strokeStyle=`rgba(150,200,255,${this.alpha*.5})`;ctx.lineWidth=1;ctx.stroke()}
+}
+
+function drawWater(){
+  const grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#0a1628');grad.addColorStop(0.3,'#0d2040');grad.addColorStop(0.6,'#122d55');grad.addColorStop(1,'#0a1e3d');
+  ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+  const t=Date.now()*.001;
+  ctx.strokeStyle='rgba(100,160,255,0.06)';ctx.lineWidth=1;
+  for(let y=0;y<H;y+=30){ctx.beginPath();for(let x=0;x<W;x+=5)ctx.lineTo(x,y+Math.sin(x*.01+t+y*.01)*8+Math.sin(x*.005+t*1.3)*5);ctx.stroke()}
+  ctx.globalAlpha=0.03;
+  for(let i=0;i<5;i++){const cx=W*.5+Math.sin(t*.3+i)*W*.3,cy=H*.5+Math.cos(t*.2+i*1.5)*H*.2;const rg=ctx.createRadialGradient(cx,cy,0,cx,cy,200);rg.addColorStop(0,'rgba(150,200,255,0.8)');rg.addColorStop(1,'transparent');ctx.fillStyle=rg;ctx.fillRect(0,0,W,H)}
+  ctx.globalAlpha=1;
+}
+
+// ===== No-image placeholder message =====
+function drawPlaceholder(){
+  ctx.fillStyle='rgba(201,168,76,0.15)';ctx.font='24px "Noto Serif KR",serif';ctx.textAlign='center';
+  ctx.fillText('⬅ 왼쪽 패널에서 단청 문양 이미지를 업로드하세요',W/2,H/2);
+  ctx.font='14px "Noto Sans KR",sans-serif';
+  ctx.fillText('PNG 또는 JPG 파일을 드래그하거나 클릭하여 추가',W/2,H/2+36);
+  ctx.textAlign='left';
+}
+
+function animate(){
+  drawWater();
+  for(let i=ripples.length-1;i>=0;i--){if(!ripples[i].update())ripples.splice(i,1);else ripples[i].draw(ctx)}
+  if(patterns.length===0){drawPlaceholder()}
+  else{patterns.forEach(p=>{p.update();p.draw(ctx)})}
+  if(handPos.visible){
+    ctx.beginPath();ctx.arc(handPos.x,handPos.y,20,0,Math.PI*2);
+    ctx.strokeStyle=handPos.grabbing?'rgba(255,215,0,0.8)':'rgba(0,255,100,0.5)';ctx.lineWidth=3;ctx.stroke();
+    if(handPos.grabbing){ctx.beginPath();ctx.arc(handPos.x,handPos.y,25,0,Math.PI*2);ctx.strokeStyle='rgba(255,215,0,0.3)';ctx.lineWidth=1;ctx.stroke()}
+    ripples.push(new Ripple(handPos.x,handPos.y,0.15));
+  }
+  requestAnimationFrame(animate);
+}
+
+// ===== Hand Tracking =====
+function isGrabbing(lm){let curled=0;[8,12,16,20].forEach((t,i)=>{if(lm[t].y>lm[[5,9,13,17][i]].y)curled++});return curled>=3}
+
+function onHandResults(results){
+  const hs=document.getElementById('handStatus');
+  if(results.multiHandLandmarks&&results.multiHandLandmarks.length>0){
+    const lm=results.multiHandLandmarks[0];
+    const palm=lm[9];handPos.x=(1-palm.x)*W;handPos.y=palm.y*H;handPos.visible=true;
+    const grab=isGrabbing(lm);
+    hs.className='hand-status detected';
+    if(grab&&!handPos.grabbing){
+      handPos.grabbing=true;
+      let minDist=150,nearest=null;
+      patterns.forEach(p=>{if(p.grabbed)return;const d=Math.hypot(p.x-handPos.x,p.y-handPos.y);if(d<minDist){minDist=d;nearest=p}});
+      if(nearest){nearest.grabbed=true;grabbedPattern=nearest;hs.textContent='✊ 문양을 잡는 중!';document.getElementById('grabbedInd').classList.add('show')}
+    }else if(!grab&&handPos.grabbing){
+      handPos.grabbing=false;
+      if(grabbedPattern){
+        grabbedPattern.grabbed=false;grabbedPattern.baseY=grabbedPattern.y;
+        if(grabbedPattern.y<H*0.25){grabCount++;document.getElementById('patternCounter').textContent='건진 문양: '+grabCount;ripples.push(new Ripple(grabbedPattern.x,H*0.3,2))}
+        grabbedPattern=null;document.getElementById('grabbedInd').classList.remove('show');
+      }
+      hs.textContent='🖐 손 감지됨';
+    }
+    if(grabbedPattern){grabbedPattern.x+=(handPos.x-grabbedPattern.x)*0.15;grabbedPattern.y+=(handPos.y-grabbedPattern.y)*0.15}
+  }else{
+    handPos.visible=false;handPos.grabbing=false;hs.className='hand-status waiting';hs.textContent='🖐 손을 보여주세요';
+    if(grabbedPattern){grabbedPattern.grabbed=false;grabbedPattern.baseY=grabbedPattern.y;grabbedPattern=null;document.getElementById('grabbedInd').classList.remove('show')}
+  }
+}
+
+canvas.addEventListener('click',e=>ripples.push(new Ripple(e.clientX,e.clientY,1.5)));
+
+async function init(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480}});
+    video.srcObject=stream;await video.play();
+    const hands=new Hands({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/hands/'+f});
+    hands.setOptions({maxNumHands:1,modelComplexity:1,minDetectionConfidence:.7,minTrackingConfidence:.5});
+    hands.onResults(onHandResults);
+    const cam=new Camera(video,{onFrame:async()=>{await hands.send({image:video})},width:640,height:480});
+    cam.start();
+  }catch(e){console.warn('No webcam:',e)}
+  animate();
+}
+init();
+</script>
+</body>
+</html>

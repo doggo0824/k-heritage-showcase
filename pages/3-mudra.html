@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>색즉시空 空즉시색 | 국가유산 인터랙티브</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700;900&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;background:#0a0604;font-family:'Noto Sans KR',sans-serif;color:#F5F0E8}
+#webcamVideo{display:none}
+#mainCanvas{position:fixed;top:0;left:0;width:100vw;height:100vh}
+.top-nav{position:fixed;top:0;left:0;right:0;z-index:999;display:flex;justify-content:space-between;align-items:center;padding:12px 24px;background:rgba(10,6,4,0.85);backdrop-filter:blur(10px);border-bottom:1px solid rgba(201,168,76,0.2)}
+.back-btn{color:#C9A84C;text-decoration:none;font-family:'Noto Serif KR',serif;font-size:1.1rem}
+.page-title{color:#C9A84C;font-family:'Noto Serif KR',serif;font-size:1.2rem;letter-spacing:4px}
+.mudra-panel{position:fixed;right:0;top:60px;bottom:0;width:380px;z-index:10;
+  background:linear-gradient(180deg,rgba(43,24,16,0.95),rgba(20,10,5,0.98));
+  border-left:1px solid rgba(201,168,76,0.2);padding:30px;overflow-y:auto;
+  backdrop-filter:blur(20px);transform:translateX(100%);transition:transform .5s cubic-bezier(.4,0,.2,1)}
+.mudra-panel.show{transform:translateX(0)}
+.mudra-panel h2{font-family:'Noto Serif KR',serif;color:#C9A84C;font-size:1.8rem;margin-bottom:6px;
+  text-shadow:0 0 15px rgba(201,168,76,0.3)}
+.mudra-panel .sanskrit{color:rgba(201,168,76,0.6);font-size:0.9rem;margin-bottom:16px;font-style:italic}
+.mudra-panel .desc{color:rgba(245,240,232,0.8);font-size:0.95rem;line-height:1.8;margin-bottom:20px}
+.mudra-panel .meaning{background:rgba(201,168,76,0.08);border-left:3px solid #C9A84C;
+  padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:20px}
+.mudra-panel .meaning h4{color:#C9A84C;font-size:0.85rem;margin-bottom:6px}
+.mudra-panel .meaning p{color:rgba(245,240,232,0.7);font-size:0.85rem;line-height:1.6}
+.confidence{display:flex;align-items:center;gap:10px;margin-top:16px}
+.confidence-bar{flex:1;height:6px;background:rgba(201,168,76,0.15);border-radius:3px;overflow:hidden}
+.confidence-fill{height:100%;background:linear-gradient(90deg,#C73E3A,#C9A84C);border-radius:3px;transition:width .3s}
+.confidence-label{color:rgba(201,168,76,0.7);font-size:0.8rem;min-width:40px}
+.webcam-view{position:fixed;left:20px;bottom:20px;width:320px;height:240px;z-index:10;
+  border-radius:12px;border:2px solid rgba(201,168,76,0.3);overflow:hidden}
+.webcam-view canvas{width:100%;height:100%}
+.mudra-visual{width:100%;height:200px;display:flex;justify-content:center;align-items:center;
+  margin-bottom:20px;background:rgba(0,0,0,0.3);border-radius:12px;position:relative;overflow:hidden}
+.mudra-visual::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;
+  background:radial-gradient(circle,rgba(201,168,76,0.05),transparent);pointer-events:none}
+.mudra-emoji{font-size:6rem;filter:drop-shadow(0 0 20px rgba(201,168,76,0.3))}
+.no-hand{position:fixed;top:50%;left:40%;transform:translate(-50%,-50%);text-align:center;z-index:5}
+.no-hand h2{font-family:'Noto Serif KR',serif;color:rgba(201,168,76,0.4);font-size:1.8rem;margin-bottom:12px}
+.no-hand p{color:rgba(245,240,232,0.3);font-size:0.9rem}
+.particle{position:absolute;width:4px;height:4px;background:#C9A84C;border-radius:50%;pointer-events:none;opacity:0}
+</style>
+</head>
+<body>
+<nav class="top-nav">
+  <a href="../index.html" class="back-btn">← 메인</a>
+  <div class="page-title">색즉시空 空즉시색</div>
+  <div style="width:60px"></div>
+</nav>
+
+<video id="webcamVideo" autoplay playsinline muted></video>
+<canvas id="mainCanvas"></canvas>
+
+<div class="no-hand" id="noHand">
+  <h2>🙏 손을 보여주세요</h2>
+  <p>카메라에 손 모양을 보여주면<br>가장 유사한 수인을 찾아드립니다</p>
+</div>
+
+<div class="mudra-panel" id="mudraPanel">
+  <div class="mudra-visual"><div class="mudra-emoji" id="mudraEmoji">🙏</div></div>
+  <h2 id="mudraName">수인 인식 중...</h2>
+  <div class="sanskrit" id="mudraSanskrit"></div>
+  <div class="desc" id="mudraDesc"></div>
+  <div class="meaning">
+    <h4>의미와 상징</h4>
+    <p id="mudraMeaning"></p>
+  </div>
+  <div class="confidence">
+    <span class="confidence-label">유사도</span>
+    <div class="confidence-bar"><div class="confidence-fill" id="confFill" style="width:0%"></div></div>
+    <span class="confidence-label" id="confValue">0%</span>
+  </div>
+</div>
+
+<script>
+const video=document.getElementById('webcamVideo');
+const canvas=document.getElementById('mainCanvas');
+const ctx=canvas.getContext('2d');
+let W,H;
+function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight;}
+resize();window.addEventListener('resize',resize);
+
+// ===== Mudra Database =====
+const MUDRAS=[
+  {
+    name:'선정인 (禪定印)',sanskrit:'Dhyāna Mudrā',emoji:'🧘',
+    desc:'두 손을 겹쳐 배 앞에 놓은 명상의 수인입니다. 석가모니가 보리수 아래에서 깨달음을 얻을 때 취한 자세로, 깊은 명상과 내면의 평화를 상징합니다.',
+    meaning:'마음의 고요함과 집중을 나타내며, 내면의 지혜를 깨우는 명상의 상태를 의미합니다. 오른손이 위에 놓이며, 양 엄지가 서로 맞닿아 삼각형을 이룹니다.',
+    check:lm=>{
+      const lh=lm[0]||[],rh=lm[1]||[];
+      if(lh.length===0||rh.length===0)return checkSingleHandDhyana(lm);
+      const bothPalmsUp=lh[12].y>lh[9].y&&rh[12].y>rh[9].y;
+      const handsClose=Math.abs(lh[0].x-rh[0].x)<0.2;
+      return (bothPalmsUp&&handsClose)?0.85:0;
+    }
+  },
+  {
+    name:'항마촉지인 (降魔觸地印)',sanskrit:'Bhūmisparśa Mudrā',emoji:'👇',
+    desc:'오른손을 무릎 위에 놓고 손끝으로 땅을 가리키는 수인입니다. 석가모니가 마라의 유혹을 물리치고 대지의 증명을 구한 순간을 나타냅니다.',
+    meaning:'악마의 유혹에 굴하지 않는 굳건한 의지와 대지가 깨달음을 증명한다는 의미를 담고 있습니다. 가장 많이 볼 수 있는 불상의 수인 중 하나입니다.',
+    check:lm=>{
+      const h=lm[0]||lm[1];if(!h||h.length===0)return 0;
+      const fingersDown=h[8].y>h[5].y&&h[12].y>h[9].y&&h[16].y>h[13].y&&h[20].y>h[17].y;
+      const palmDown=h[0].y<h[12].y;
+      return (fingersDown&&palmDown)?0.8:0;
+    }
+  },
+  {
+    name:'시무외인 (施無畏印)',sanskrit:'Abhaya Mudrā',emoji:'✋',
+    desc:'오른손을 어깨 높이로 들어 손바닥을 밖으로 보이는 수인입니다. 두려움을 없애주고 중생을 보호하겠다는 부처의 자비를 나타냅니다.',
+    meaning:'두려움이 없음(無畏)을 베푸는 자세로, 모든 중생에게 평안과 보호를 약속합니다. 서 있는 불상에서 자주 볼 수 있습니다.',
+    check:lm=>{
+      const h=lm[0]||lm[1];if(!h||h.length===0)return 0;
+      const allUp=h[8].y<h[6].y&&h[12].y<h[10].y&&h[16].y<h[14].y&&h[20].y<h[18].y;
+      const palmForward=h[5].z<h[17].z||true;
+      const handHigh=h[0].y<0.5;
+      return (allUp&&handHigh)?0.85:((allUp)?0.6:0);
+    }
+  },
+  {
+    name:'여원인 (與願印)',sanskrit:'Varada Mudrā',emoji:'🤲',
+    desc:'손을 아래로 내려 손바닥을 밖으로 보이는 수인입니다. 중생의 소원을 들어주겠다는 부처의 자비와 보시를 상징합니다.',
+    meaning:'소원을 이루어주는(與願) 자세로, 자비와 보시의 덕목을 나타냅니다. 시무외인과 함께 쓰이는 경우가 많습니다.',
+    check:lm=>{
+      const h=lm[0]||lm[1];if(!h||h.length===0)return 0;
+      const allUp=h[8].y<h[6].y&&h[12].y<h[10].y&&h[16].y<h[14].y&&h[20].y<h[18].y;
+      const handLow=h[0].y>0.55;
+      return (allUp&&handLow)?0.85:0;
+    }
+  },
+  {
+    name:'전법륜인 (轉法輪印)',sanskrit:'Dharmachakra Mudrā',emoji:'👌',
+    desc:'양손을 가슴 앞에 들고 엄지와 검지로 원을 만드는 수인입니다. 부처가 처음으로 설법한 초전법륜을 나타냅니다.',
+    meaning:'법의 수레바퀴를 굴린다는 의미로, 진리의 가르침이 세상에 퍼져나감을 상징합니다. 가르침과 전파의 수인입니다.',
+    check:lm=>{
+      const h=lm[0]||lm[1];if(!h||h.length===0)return 0;
+      const thumbIndexClose=Math.hypot(h[4].x-h[8].x,h[4].y-h[8].y)<0.06;
+      const otherUp=h[12].y<h[10].y&&h[16].y<h[14].y;
+      return (thumbIndexClose&&otherUp)?0.9:((thumbIndexClose)?0.5:0);
+    }
+  },
+  {
+    name:'합장인 (合掌印)',sanskrit:'Añjali Mudrā',emoji:'🙏',
+    desc:'두 손바닥을 가슴 앞에서 합장하는 수인입니다. 가장 보편적인 예배와 경배의 자세로, 공경과 감사의 마음을 표현합니다.',
+    meaning:'두 손이 하나로 합쳐지듯 마음을 하나로 모아 경건하게 기도하는 자세입니다. 동서양을 막론하고 신성함을 표현하는 보편적 제스처입니다.',
+    check:lm=>{
+      if(lm.length<2||!lm[0]||!lm[1])return 0;
+      const l=lm[0],r=lm[1];
+      const dist=Math.hypot(l[9].x-r[9].x,l[9].y-r[9].y);
+      const bothUp=l[12].y<l[0].y&&r[12].y<r[0].y;
+      return (dist<0.1&&bothUp)?0.9:((dist<0.15)?0.5:0);
+    }
+  },
+  {
+    name:'지권인 (智拳印)',sanskrit:'Vajra Mudrā',emoji:'✊',
+    desc:'왼손 검지를 오른손으로 감싸 쥐는 수인입니다. 대일여래의 수인으로, 이지(理智)의 합일과 번뇌를 끊는 지혜를 상징합니다.',
+    meaning:'금강의 지혜로 번뇌를 부수고, 이치와 지혜가 하나가 되는 깨달음의 경지를 나타냅니다. 비로자나불(대일여래)의 대표적 수인입니다.',
+    check:lm=>{
+      const h=lm[0]||lm[1];if(!h||h.length===0)return 0;
+      const allCurled=h[8].y>h[6].y&&h[12].y>h[10].y&&h[16].y>h[14].y&&h[20].y>h[18].y;
+      return allCurled?0.7:0;
+    }
+  }
+];
+
+function checkSingleHandDhyana(lm){
+  const h=lm[0]||lm[1];if(!h||h.length===0)return 0;
+  const palmUp=h[12].y>h[0].y;
+  const relaxed=Math.abs(h[8].y-h[12].y)<0.1;
+  return (palmUp&&relaxed)?0.5:0;
+}
+
+let currentMudra=null;
+let lastMudraTime=0;
+
+function recognizeMudra(multiHandLandmarks){
+  const lm=multiHandLandmarks;
+  let bestMatch=null;let bestScore=0;
+  MUDRAS.forEach(m=>{
+    const score=m.check(lm);
+    if(score>bestScore){bestScore=score;bestMatch=m;}
+  });
+  if(bestScore>0.4){
+    if(!currentMudra||currentMudra.name!==bestMatch.name||Date.now()-lastMudraTime>500){
+      currentMudra=bestMatch;lastMudraTime=Date.now();
+      updateMudraPanel(bestMatch,bestScore);
+    }
+  }
+}
+
+function updateMudraPanel(mudra,score){
+  const panel=document.getElementById('mudraPanel');
+  panel.classList.add('show');
+  document.getElementById('noHand').style.display='none';
+  document.getElementById('mudraEmoji').textContent=mudra.emoji;
+  document.getElementById('mudraName').textContent=mudra.name;
+  document.getElementById('mudraSanskrit').textContent=mudra.sanskrit;
+  document.getElementById('mudraDesc').textContent=mudra.desc;
+  document.getElementById('mudraMeaning').textContent=mudra.meaning;
+  const pct=Math.round(score*100);
+  document.getElementById('confFill').style.width=pct+'%';
+  document.getElementById('confValue').textContent=pct+'%';
+}
+
+// ===== Drawing =====
+function drawFrame(){
+  ctx.fillStyle='#0a0604';ctx.fillRect(0,0,W,H);
+  // Background particles
+  const t=Date.now()*0.001;
+  ctx.globalAlpha=0.03;
+  for(let i=0;i<20;i++){
+    const x=((Math.sin(t*0.3+i*1.7)+1)/2)*W;
+    const y=((Math.cos(t*0.2+i*2.1)+1)/2)*H;
+    const r=ctx.createRadialGradient(x,y,0,x,y,100);
+    r.addColorStop(0,'rgba(201,168,76,0.5)');r.addColorStop(1,'transparent');
+    ctx.fillStyle=r;ctx.fillRect(0,0,W,H);
+  }
+  ctx.globalAlpha=1;
+  // Draw webcam feed (mirrored, centered)
+  if(video.readyState>=2){
+    const vw=W*0.5;const vh=vw*(video.videoHeight/video.videoWidth);
+    const vx=(W-vw)/2-100;const vy=(H-vh)/2;
+    ctx.save();ctx.translate(vx+vw,vy);ctx.scale(-1,1);
+    ctx.globalAlpha=0.85;
+    ctx.drawImage(video,0,0,vw,vh);
+    ctx.restore();
+    // Border
+    ctx.strokeStyle='rgba(201,168,76,0.3)';ctx.lineWidth=1;
+    ctx.strokeRect(vx,vy,vw,vh);
+  }
+  requestAnimationFrame(drawFrame);
+}
+
+// ===== Init =====
+async function init(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:{width:1280,height:720}});
+    video.srcObject=stream;await video.play();
+    const hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+    hands.setOptions({maxNumHands:2,modelComplexity:1,minDetectionConfidence:0.7,minTrackingConfidence:0.5});
+    hands.onResults(results=>{
+      if(results.multiHandLandmarks&&results.multiHandLandmarks.length>0){
+        recognizeMudra(results.multiHandLandmarks);
+      }else{
+        document.getElementById('mudraPanel').classList.remove('show');
+        document.getElementById('noHand').style.display='block';
+        currentMudra=null;
+      }
+    });
+    const cam=new Camera(video,{onFrame:async()=>{await hands.send({image:video})},width:1280,height:720});
+    cam.start();
+  }catch(e){console.error(e)}
+  drawFrame();
+}
+init();
+</script>
+</body>
+</html>

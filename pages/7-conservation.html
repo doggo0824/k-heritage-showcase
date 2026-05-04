@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>보존과학 체험 | 국가유산 인터랙티브</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700;900&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;background:#1a2332;font-family:'Noto Sans KR',sans-serif;color:#F5F0E8}
+.top-nav{position:fixed;top:0;left:0;right:0;z-index:999;display:flex;justify-content:space-between;align-items:center;padding:12px 24px;background:rgba(26,35,50,0.95);backdrop-filter:blur(10px);border-bottom:1px solid rgba(201,168,76,0.2)}
+.back-btn{color:#C9A84C;text-decoration:none;font-family:'Noto Serif KR',serif;font-size:1.1rem}
+.page-title{color:#C9A84C;font-family:'Noto Serif KR',serif;font-size:1.2rem;letter-spacing:4px}
+canvas{display:block;margin:70px auto 0;border-radius:12px;border:2px solid rgba(201,168,76,0.2);
+  box-shadow:0 8px 32px rgba(0,0,0,0.3)}
+.game-ui{position:fixed;top:70px;right:20px;z-index:10;display:flex;flex-direction:column;gap:12px}
+.ui-panel{background:rgba(26,35,50,0.9);border:1px solid rgba(201,168,76,0.2);border-radius:12px;
+  padding:16px;backdrop-filter:blur(10px);width:200px}
+.ui-panel h4{color:#C9A84C;font-family:'Noto Serif KR',serif;font-size:0.9rem;margin-bottom:8px}
+.progress-bar{width:100%;height:8px;background:rgba(201,168,76,0.1);border-radius:4px;overflow:hidden;margin-top:4px}
+.progress-fill{height:100%;background:linear-gradient(90deg,#C73E3A,#C9A84C,#3E7A4C);border-radius:4px;transition:width .3s}
+.tool-btn{display:flex;align-items:center;gap:8px;width:100%;background:rgba(201,168,76,0.08);
+  border:1px solid rgba(201,168,76,0.15);color:#F5F0E8;padding:8px 12px;border-radius:6px;
+  cursor:pointer;font-size:0.8rem;margin-bottom:4px;transition:all .2s}
+.tool-btn:hover,.tool-btn.active{border-color:#C9A84C;background:rgba(201,168,76,0.2)}
+.tool-btn .tool-icon{font-size:1.2rem}
+.step-info{color:rgba(245,240,232,0.7);font-size:0.8rem;line-height:1.5}
+.score-display{text-align:center;font-family:'Noto Serif KR',serif}
+.score-display .score{font-size:2rem;color:#C9A84C}
+.score-display .grade{font-size:1rem;color:rgba(245,240,232,0.6);margin-top:4px}
+.select-screen{position:fixed;top:0;left:0;right:0;bottom:0;z-index:100;background:rgba(26,35,50,0.98);
+  display:flex;flex-direction:column;justify-content:center;align-items:center}
+.select-screen h2{font-family:'Noto Serif KR',serif;color:#C9A84C;font-size:2rem;margin-bottom:30px;letter-spacing:4px}
+.select-screen .subtitle{color:rgba(245,240,232,0.5);font-size:0.9rem;margin-bottom:40px}
+.artifact-cards{display:flex;gap:24px}
+.artifact-card{width:200px;height:280px;background:rgba(43,24,16,0.6);border:2px solid rgba(201,168,76,0.2);
+  border-radius:16px;padding:24px;text-align:center;cursor:pointer;transition:all .4s;
+  display:flex;flex-direction:column;justify-content:center;align-items:center}
+.artifact-card:hover{transform:translateY(-8px);border-color:#C9A84C;box-shadow:0 8px 30px rgba(201,168,76,0.2)}
+.artifact-card .art-icon{font-size:4rem;margin-bottom:16px}
+.artifact-card .art-name{font-family:'Noto Serif KR',serif;color:#C9A84C;font-size:1.2rem;margin-bottom:8px}
+.artifact-card .art-desc{color:rgba(245,240,232,0.5);font-size:0.75rem;line-height:1.4}
+.result-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:200;background:rgba(26,35,50,0.95);
+  display:none;flex-direction:column;justify-content:center;align-items:center}
+.result-overlay.show{display:flex}
+.result-overlay h2{font-family:'Noto Serif KR',serif;color:#C9A84C;font-size:2rem;margin-bottom:20px}
+.result-stars{font-size:3rem;margin-bottom:20px}
+.result-details{color:rgba(245,240,232,0.7);font-size:0.9rem;line-height:1.8;text-align:center;margin-bottom:30px}
+.result-btn{background:linear-gradient(135deg,#C9A84C,#D4A843);color:#2B1810;border:none;
+  padding:14px 32px;border-radius:8px;font-size:1rem;cursor:pointer;font-family:'Noto Serif KR';font-weight:700}
+</style>
+</head>
+<body>
+<nav class="top-nav">
+  <a href="../index.html" class="back-btn">← 메인</a>
+  <div class="page-title">보존과학 체험</div>
+  <div style="width:60px"></div>
+</nav>
+
+<div class="select-screen" id="selectScreen">
+  <h2>🔬 유물을 선택하세요</h2>
+  <div class="subtitle">보존과학자가 되어 유물을 복원해보세요</div>
+  <div class="artifact-cards">
+    <div class="artifact-card" onclick="startGame('wood')">
+      <div class="art-icon">🪵</div>
+      <div class="art-name">목재 유물</div>
+      <div class="art-desc">수침 처리부터 형태 복원까지<br>목재 유물 보존 과정을 체험합니다</div>
+    </div>
+    <div class="artifact-card" onclick="startGame('stone')">
+      <div class="art-icon">🪨</div>
+      <div class="art-name">석재 유물</div>
+      <div class="art-desc">표면 세척부터 방수 처리까지<br>석재 유물 보존 과정을 체험합니다</div>
+    </div>
+    <div class="artifact-card" onclick="startGame('iron')">
+      <div class="art-icon">⚔️</div>
+      <div class="art-name">철제 유물</div>
+      <div class="art-desc">X선 촬영부터 강화 처리까지<br>철제 유물 보존 과정을 체험합니다</div>
+    </div>
+  </div>
+</div>
+
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<div class="game-ui" id="gameUI" style="display:none">
+  <div class="ui-panel">
+    <h4 id="stepTitle">현재 단계</h4>
+    <div class="step-info" id="stepInfo">설명</div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+  </div>
+  <div class="ui-panel" id="toolPanel">
+    <h4>🧰 도구</h4>
+    <div id="toolButtons"></div>
+  </div>
+  <div class="ui-panel">
+    <div class="score-display">
+      <div class="score" id="scoreDisplay">0</div>
+      <div class="grade">점수</div>
+    </div>
+  </div>
+</div>
+
+<div class="result-overlay" id="resultOverlay">
+  <h2 id="resultTitle">보존 완료!</h2>
+  <div class="result-stars" id="resultStars">⭐⭐⭐</div>
+  <div class="result-details" id="resultDetails"></div>
+  <button class="result-btn" onclick="backToSelect()">다른 유물 체험하기</button>
+</div>
+
+<script>
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
+const CW=800,CH=600;
+let gameState='select';
+let currentArtifact=null;
+let currentStep=0;
+let score=0;
+let stepProgress=0;
+let activeTool=null;
+let mouseX=0,mouseY=0;
+let mouseDown=false;
+let particles=[];
+
+// ===== Artifact Definitions =====
+const ARTIFACTS={
+  wood:{
+    name:'목재 유물 (목조 불상)',
+    color:'#8B6914',darkColor:'#5C4510',
+    steps:[
+      {name:'수침 처리',desc:'물에 담가 안정화시킵니다. 유물 위를 천천히 드래그하세요.',
+        tools:['💧 수조','🌡️ 온도계'],action:'drag',target:80,
+        draw:(ctx,prog)=>{
+          const waterLevel=CH*0.3+prog/100*(CH*0.4);
+          ctx.fillStyle='rgba(46,92,138,0.3)';ctx.fillRect(200,waterLevel,400,CH-waterLevel-100);
+        }},
+      {name:'PEG 처리',desc:'PEG 용액으로 세포벽을 강화합니다. 유물에 용액을 골고루 바르세요.',
+        tools:['🧪 PEG 용액','🖌️ 붓'],action:'paint',target:90,
+        draw:(ctx,prog)=>{
+          ctx.fillStyle=`rgba(201,168,76,${prog/300})`;
+          ctx.fillRect(250,150,300,300);
+        }},
+      {name:'진공 동결 건조',desc:'진공 상태에서 동결 건조합니다. 온도를 조절하세요.',
+        tools:['❄️ 냉각기','🔧 진공 펌프'],action:'click',target:10,
+        draw:(ctx,prog)=>{
+          for(let i=0;i<prog*2;i++){
+            ctx.fillStyle='rgba(200,220,255,0.5)';
+            ctx.fillRect(250+Math.random()*300,150+Math.random()*300,3,3);
+          }
+        }},
+      {name:'형태 복원',desc:'손상된 부분을 복원합니다. 균열 부분을 클릭하세요.',
+        tools:['🔨 복원 도구','🧴 접착제'],action:'click',target:8,
+        draw:(ctx,prog)=>{
+          ctx.strokeStyle='rgba(62,122,76,0.6)';ctx.lineWidth=2;
+          for(let i=0;i<prog;i++){
+            ctx.beginPath();ctx.arc(280+i*30,300,8,0,Math.PI*2);ctx.stroke();
+          }
+        }}
+    ]
+  },
+  stone:{
+    name:'석재 유물 (석탑 부재)',
+    color:'#888888',darkColor:'#555555',
+    steps:[
+      {name:'표면 세척',desc:'이끼와 오염물을 제거합니다. 유물 표면을 문질러주세요.',
+        tools:['🧽 스펀지','💧 증류수'],action:'drag',target:85},
+      {name:'접합',desc:'파손된 조각을 접합합니다. 조각을 올바른 위치에 놓으세요.',
+        tools:['🧴 에폭시','🔧 클램프'],action:'click',target:6},
+      {name:'보강 처리',desc:'내부를 보강합니다. 보강재를 주입하세요.',
+        tools:['💉 주입기','🧪 보강재'],action:'paint',target:80},
+      {name:'방수 처리',desc:'발수 처리로 마무리합니다. 코팅제를 고르게 바르세요.',
+        tools:['🖌️ 코팅 붓','🧴 발수제'],action:'paint',target:90}
+    ]
+  },
+  iron:{
+    name:'철제 유물 (철제 갑옷)',
+    color:'#4a4a4a',darkColor:'#2a2a2a',
+    steps:[
+      {name:'X선 촬영',desc:'내부 구조를 확인합니다. 스캔 영역을 설정하세요.',
+        tools:['📡 X선 장비','🖥️ 모니터'],action:'click',target:5},
+      {name:'녹 제거',desc:'부식된 녹을 제거합니다. 녹 부분을 문질러주세요.',
+        tools:['🔧 스크레이퍼','🧪 녹 제거제'],action:'drag',target:90},
+      {name:'탈염 처리',desc:'염화물을 제거합니다. 유물을 용액에 침지하세요.',
+        tools:['🧪 탈염 용액','🌡️ 측정기'],action:'paint',target:75},
+      {name:'강화 처리',desc:'표면을 강화합니다. 강화제를 도포하세요.',
+        tools:['🖌️ 도포 붓','🧴 강화제'],action:'paint',target:85}
+    ]
+  }
+};
+
+// ===== Drawing Functions =====
+function drawArtifact(type){
+  const a=ARTIFACTS[type];
+  ctx.fillStyle=a.color;
+  if(type==='wood'){
+    // Buddha statue silhouette
+    ctx.beginPath();ctx.ellipse(400,220,60,80,0,0,Math.PI*2);ctx.fill();// head
+    ctx.fillRect(340,280,120,180);// body
+    ctx.fillRect(300,320,200,40);// arms
+    ctx.fillRect(360,460,80,40);// base
+    // Wood grain
+    ctx.strokeStyle=a.darkColor;ctx.lineWidth=1;
+    for(let i=0;i<8;i++){
+      ctx.beginPath();ctx.moveTo(350,290+i*20);ctx.quadraticCurveTo(400,285+i*20,450,290+i*20);ctx.stroke();
+    }
+  }else if(type==='stone'){
+    // Pagoda piece
+    ctx.fillRect(300,200,200,50);ctx.fillRect(320,250,160,200);ctx.fillRect(280,180,240,30);
+    ctx.fillStyle=a.darkColor;
+    ctx.fillRect(340,270,20,160);ctx.fillRect(440,270,20,160);
+    // Cracks
+    ctx.strokeStyle='#333';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(380,250);ctx.lineTo(370,350);ctx.lineTo(390,400);ctx.stroke();
+  }else{
+    // Armor shape
+    ctx.beginPath();ctx.moveTo(350,180);ctx.lineTo(450,180);ctx.lineTo(470,300);
+    ctx.lineTo(460,450);ctx.lineTo(340,450);ctx.lineTo(330,300);ctx.closePath();ctx.fill();
+    // Plates
+    ctx.strokeStyle='#666';ctx.lineWidth=1;
+    for(let i=0;i<6;i++){ctx.beginPath();ctx.moveTo(335,210+i*40);ctx.lineTo(465,210+i*40);ctx.stroke();}
+    // Rust spots
+    ctx.fillStyle='#8B4513';
+    [[ 370,220],[420,280],[380,350],[430,400],[360,300]].forEach(([x,y])=>{
+      ctx.beginPath();ctx.ellipse(x,y,15+Math.random()*10,10+Math.random()*8,Math.random(),0,Math.PI*2);ctx.fill();
+    });
+  }
+}
+
+function drawWorkbench(){
+  // Background
+  const grad=ctx.createLinearGradient(0,0,0,CH);
+  grad.addColorStop(0,'#1a2332');grad.addColorStop(1,'#0d1520');
+  ctx.fillStyle=grad;ctx.fillRect(0,0,CW,CH);
+  // Work table
+  ctx.fillStyle='#3a2a1a';ctx.fillRect(150,CH-120,500,120);
+  ctx.fillStyle='#4a3a2a';ctx.fillRect(150,CH-120,500,8);
+  // Grid lines
+  ctx.strokeStyle='rgba(201,168,76,0.05)';ctx.lineWidth=1;
+  for(let x=0;x<CW;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,CH);ctx.stroke();}
+  for(let y=0;y<CH;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(CW,y);ctx.stroke();}
+}
+
+function drawTool(){
+  if(activeTool!==null){
+    ctx.font='24px serif';ctx.fillText(ARTIFACTS[currentArtifact].steps[currentStep].tools[activeTool].split(' ')[0],mouseX-12,mouseY+8);
+  }
+}
+
+// ===== Game Logic =====
+function startGame(type){
+  currentArtifact=type;currentStep=0;score=0;stepProgress=0;
+  document.getElementById('selectScreen').style.display='none';
+  document.getElementById('gameUI').style.display='flex';
+  activeTool=0;
+  updateUI();
+  gameLoop();
+}
+
+function updateUI(){
+  const step=ARTIFACTS[currentArtifact].steps[currentStep];
+  document.getElementById('stepTitle').textContent=`${currentStep+1}/4: ${step.name}`;
+  document.getElementById('stepInfo').textContent=step.desc;
+  document.getElementById('progressFill').style.width=stepProgress+'%';
+  document.getElementById('scoreDisplay').textContent=score;
+  // Tools
+  const toolDiv=document.getElementById('toolButtons');
+  toolDiv.innerHTML='';
+  step.tools.forEach((t,i)=>{
+    const btn=document.createElement('button');btn.className='tool-btn'+(activeTool===i?' active':'');
+    btn.innerHTML=`<span class="tool-icon">${t.split(' ')[0]}</span>${t.split(' ').slice(1).join(' ')}`;
+    btn.onclick=()=>{activeTool=i;updateUI();};
+    toolDiv.appendChild(btn);
+  });
+}
+
+function completeStep(){
+  score+=25;
+  currentStep++;
+  stepProgress=0;
+  if(currentStep>=4){showResult();return;}
+  activeTool=0;
+  updateUI();
+}
+
+function showResult(){
+  document.getElementById('gameUI').style.display='none';
+  const overlay=document.getElementById('resultOverlay');
+  overlay.classList.add('show');
+  const stars=score>=90?'⭐⭐⭐':score>=60?'⭐⭐':'⭐';
+  document.getElementById('resultStars').textContent=stars;
+  document.getElementById('resultTitle').textContent=`${ARTIFACTS[currentArtifact].name} 보존 완료!`;
+  document.getElementById('resultDetails').textContent=`총점: ${score}점\n모든 보존 처리 단계를 완료했습니다!`;
+}
+
+function backToSelect(){
+  document.getElementById('resultOverlay').classList.remove('show');
+  document.getElementById('selectScreen').style.display='flex';
+  gameState='select';
+}
+
+// ===== Game Loop =====
+function gameLoop(){
+  if(gameState==='select')return;
+  drawWorkbench();
+  drawArtifact(currentArtifact);
+  // Step-specific effects
+  const step=ARTIFACTS[currentArtifact].steps[currentStep];
+  if(step&&step.draw)step.draw(ctx,stepProgress);
+  // Particles
+  particles=particles.filter(p=>{
+    p.x+=p.vx;p.y+=p.vy;p.life-=1;p.vy+=0.05;
+    ctx.globalAlpha=p.life/p.maxLife;
+    ctx.fillStyle=p.color;ctx.fillRect(p.x,p.y,p.size,p.size);
+    ctx.globalAlpha=1;
+    return p.life>0;
+  });
+  drawTool();
+  // Progress check
+  if(step&&stepProgress>=step.target){completeStep();}
+  requestAnimationFrame(gameLoop);
+}
+
+// ===== Input Handlers =====
+canvas.addEventListener('mousemove',e=>{
+  const r=canvas.getBoundingClientRect();
+  mouseX=(e.clientX-r.left)*(CW/r.width);
+  mouseY=(e.clientY-r.top)*(CH/r.height);
+  if(mouseDown&&ARTIFACTS[currentArtifact]){
+    const step=ARTIFACTS[currentArtifact].steps[currentStep];
+    if(step&&(step.action==='drag'||step.action==='paint')){
+      if(mouseX>250&&mouseX<550&&mouseY>150&&mouseY<500){
+        stepProgress=Math.min(stepProgress+0.5,step.target);
+        updateUI();
+        particles.push({x:mouseX,y:mouseY,vx:(Math.random()-0.5)*2,vy:-Math.random()*2,
+          life:30,maxLife:30,size:3,color:step.action==='drag'?'#4488FF':'#C9A84C'});
+      }
+    }
+  }
+});
+canvas.addEventListener('mousedown',e=>{
+  mouseDown=true;
+  if(ARTIFACTS[currentArtifact]){
+    const step=ARTIFACTS[currentArtifact].steps[currentStep];
+    if(step&&step.action==='click'){
+      if(mouseX>250&&mouseX<550&&mouseY>150&&mouseY<500){
+        stepProgress++;score+=2;updateUI();
+        for(let i=0;i<10;i++){
+          particles.push({x:mouseX,y:mouseY,vx:(Math.random()-0.5)*4,vy:-Math.random()*4,
+            life:20,maxLife:20,size:4,color:'#FFD700'});
+        }
+      }
+    }
+  }
+});
+canvas.addEventListener('mouseup',()=>mouseDown=false);
+canvas.addEventListener('mouseleave',()=>mouseDown=false);
+</script>
+</body>
+</html>

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>국가유산 인터랙티브 체험관</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700;900&family=Noto+Sans+KR:wght@300;400;500;700&family=Nanum+Myeongjo:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--wood:#2B1810;--gold:#C9A84C;--red:#C73E3A;--blue:#2E5C8A;--green:#3E7A4C;--paper:#F5F0E8;--dark:#0A0604;--gold-glow:rgba(201,168,76,0.4)}
+body{overflow:hidden;background:#000;font-family:'Noto Sans KR',sans-serif;cursor:none}
+#webcam{position:fixed;top:0;left:0;width:100vw;height:100vh;object-fit:cover;z-index:0;transform:scaleX(-1)}
+.vignette{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2;pointer-events:none;background:radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,0.7) 100%)}
+.header{position:fixed;top:0;left:0;right:0;z-index:10;text-align:center;padding:20px;background:linear-gradient(180deg,rgba(10,6,4,0.9) 0%,transparent 100%)}
+.header h1{font-family:'Noto Serif KR',serif;color:var(--gold);font-size:2.2rem;text-shadow:0 0 20px var(--gold-glow),0 2px 4px rgba(0,0,0,0.8);letter-spacing:8px}
+.header .sub{color:rgba(201,168,76,0.6);font-size:0.85rem;margin-top:4px;letter-spacing:4px}
+.lang-selector{position:fixed;top:20px;right:24px;z-index:20;display:flex;gap:8px}
+.lang-selector button{background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);color:var(--gold);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.85rem;font-family:'Noto Sans KR';transition:all .3s;backdrop-filter:blur(5px)}
+.lang-selector button:hover,.lang-selector button.active{background:rgba(201,168,76,0.3);color:#fff}
+.cards-container{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5;display:grid;grid-template-columns:repeat(4,1fr);gap:20px;padding:20px;max-width:1200px;width:90%}
+.card{position:relative;background:rgba(43,24,16,0.75);border:1px solid rgba(201,168,76,0.25);border-radius:12px;padding:28px 20px;text-align:center;cursor:pointer;backdrop-filter:blur(12px);transition:all .4s cubic-bezier(.4,0,.2,1);overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--red),var(--gold),var(--blue));opacity:0;transition:opacity .4s}
+.card:hover::before,.card.hovered::before{opacity:1}
+.card:hover,.card.hovered{transform:translateY(-4px);border-color:rgba(201,168,76,0.5);box-shadow:0 8px 32px rgba(201,168,76,0.15)}
+.card-icon{font-size:2.5rem;margin-bottom:12px;filter:drop-shadow(0 0 8px var(--gold-glow))}
+.card-title{font-family:'Noto Serif KR',serif;color:var(--gold);font-size:1.1rem;margin-bottom:6px;letter-spacing:2px}
+.card-desc{color:rgba(245,240,232,0.5);font-size:0.75rem;line-height:1.4}
+.card-num{position:absolute;top:8px;right:12px;color:rgba(201,168,76,0.2);font-family:'Noto Serif KR';font-size:0.7rem}
+.gauge-svg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:120px;height:120px;pointer-events:none;opacity:0;transition:opacity .3s}
+.gauge-svg circle.bg{fill:none;stroke:rgba(0,255,80,0.1);stroke-width:4}
+.gauge-svg circle.fg{fill:none;stroke:rgba(0,255,80,0.45);stroke-width:4;stroke-dasharray:339.292;stroke-dashoffset:339.292;stroke-linecap:round;transition:stroke-dashoffset .1s linear;filter:drop-shadow(0 0 6px rgba(0,255,80,0.4))}
+.cursor-dot{position:fixed;width:16px;height:16px;border-radius:50%;background:rgba(0,255,80,0.6);border:2px solid rgba(0,255,80,0.9);pointer-events:none;z-index:100;transform:translate(-50%,-50%);box-shadow:0 0 12px rgba(0,255,80,0.4);display:none}
+.crt-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:1000;background:#000;display:none;flex-direction:column;justify-content:center;align-items:center}
+.crt-overlay.active{display:flex}
+.crt-overlay::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,20,0,0.15) 2px,rgba(0,20,0,0.15) 4px);pointer-events:none;z-index:1;animation:scanMove 8s linear infinite}
+.crt-overlay::after{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,0.6) 100%);z-index:2;pointer-events:none}
+@keyframes scanMove{0%{transform:translateY(0)}100%{transform:translateY(4px)}}
+.crt-text{font-family:'Courier New',monospace;color:#00FF41;font-size:1rem;z-index:3;text-shadow:0 0 5px #00FF41,0 0 10px rgba(0,255,65,0.5);max-width:600px;padding:40px;line-height:1.8}
+.crt-text .cursor-blink{animation:blink .7s step-end infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+.crt-flicker{animation:flicker .15s infinite}
+@keyframes flicker{0%{opacity:1}50%{opacity:.97}100%{opacity:1}}
+.crt-bar{position:absolute;left:0;right:0;height:30%;background:rgba(0,255,65,0.03);z-index:1;animation:barMove 4s linear infinite}
+@keyframes barMove{0%{top:-30%}100%{top:130%}}
+.noise-canvas{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;opacity:.04;mix-blend-mode:overlay}
+.crt-progress{width:300px;height:4px;background:rgba(0,255,65,0.15);border-radius:2px;margin-top:30px;z-index:3;overflow:hidden}
+.crt-progress-bar{height:100%;background:#00FF41;width:0%;transition:width .1s;box-shadow:0 0 10px #00FF41}
+.boot-logo{font-family:'Noto Serif KR',serif;color:#00FF41;font-size:1.5rem;letter-spacing:6px;z-index:3;margin-bottom:30px;text-shadow:0 0 15px rgba(0,255,65,0.6)}
+.startup{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:#000;display:flex;justify-content:center;align-items:center;flex-direction:column;transition:opacity 1s}
+.startup.hide{opacity:0;pointer-events:none}
+.startup h1{font-family:'Noto Serif KR',serif;color:var(--gold);font-size:2.5rem;letter-spacing:12px;animation:fadeInUp 1.5s ease-out;text-shadow:0 0 30px var(--gold-glow)}
+.startup .sub{color:rgba(201,168,76,0.5);font-size:.9rem;margin-top:12px;animation:fadeInUp 1.5s .3s ease-out both}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.hand-guide{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:10;color:rgba(201,168,76,0.5);font-size:.8rem;text-align:center;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+@media(max-width:1024px){.cards-container{grid-template-columns:repeat(2,1fr);gap:14px}}
+@media(max-width:600px){.cards-container{grid-template-columns:1fr;gap:10px}.header h1{font-size:1.4rem;letter-spacing:4px}}
+</style>
+</head>
+<body>
+<div class="startup" id="startup"><h1>국가유산 인터랙티브</h1><div class="sub">National Heritage Interactive Experience</div></div>
+<video id="webcam" autoplay playsinline muted></video>
+<div class="vignette"></div>
+<div class="cursor-dot" id="cursorDot"></div>
+<div class="header"><h1>국가유산 인터랙티브</h1><div class="sub">National Heritage Interactive Experience</div></div>
+<div class="lang-selector">
+  <button onclick="setLang('ko')">한국어</button>
+  <button onclick="setLang('en')">EN</button>
+  <button onclick="setLang('ja')">日本語</button>
+  <button onclick="setLang('zh')">中文</button>
+</div>
+<div class="cards-container" id="cardsContainer">
+  <div class="card" data-page="pages/1-dancheong.html" data-idx="1"><div class="card-num">01</div><div class="card-icon">🌊</div><div class="card-title">단청 물결</div><div class="card-desc">손으로 물 위의 단청 문양을 건져보세요</div><svg class="gauge-svg" viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="54"/><circle class="fg" cx="60" cy="60" r="54"/></svg></div>
+  <div class="card" data-page="pages/2-crt-heritage.html"><div class="card-num">02</div><div class="card-icon">📺</div><div class="card-title">국가유산 CRT</div><div class="card-desc">CRT 효과와 3D 국가유산을 체험하세요</div><svg class="gauge-svg" viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="54"/><circle class="fg" cx="60" cy="60" r="54"/></svg></div>
+  <div class="card" data-page="pages/3-mudra.html"><div class="card-num">03</div><div class="card-icon">🙏</div><div class="card-title">색즉시空</div><div class="card-desc">손 모양으로 수인을 체험하세요</div><svg class="gauge-svg" viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="54"/><circle class="fg" cx="60" cy="60" r="54"/></svg></div>
+  <div class="card" data-page="pages/4-incredibox.html"><div class="card-num">04</div><div class="card-icon">🥁</div><div class="card-title">전통 인크레디박스</div><div class="card-desc">전통 악기로 음악을 만들어보세요</div><svg class="gauge-svg" viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="54"/><circle class="fg" cx="60" cy="60" r="54"/></svg></div>
+  <div class="card" data-page="pages/5-photobooth.html"><div class="card-num">05</div><div class="card-icon">📸</div><div class="card-title">전통문양 인생네컷</div><div class="card-desc">전통문양으로 인생네컷을 꾸며보세요</div><svg class="gauge-svg" viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="54"/><circle class="fg" cx="60" cy="60" r="54"/></svg></div>
+  <div class="card" data-page="pages/6-historian.html"><div class="card-num">06</div><div class="card-icon">📜</div><div class="card-title">사관 LLM</div><div class="card-desc">당신의 이야기를 실록으로 기록합니다</div><svg class="gauge-svg" viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="54"/><circle class="fg" cx="60" cy="60" r="54"/></svg></div>
+  <div class="card" data-page="pages/7-conservation.html"><div class="card-num">07</div><div class="card-icon">🔬</div><div class="card-title">보존과학 체험</div><div class="card-desc">유물 보존 과학자가 되어보세요</div><svg class="gauge-svg" viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="54"/><circle class="fg" cx="60" cy="60" r="54"/></svg></div>
+  <div class="card" data-page="pages/8-interactive.html"><div class="card-num">08</div><div class="card-icon">🖨️</div><div class="card-title">인터랙티브 국가유산</div><div class="card-desc">AI로 국가유산 이미지를 생성하세요</div><svg class="gauge-svg" viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="54"/><circle class="fg" cx="60" cy="60" r="54"/></svg></div>
+</div>
+<div class="hand-guide" id="handGuide">☝️ 검지로 메뉴를 가리켜 선택하세요</div>
+<div class="crt-overlay" id="crtOverlay">
+  <canvas class="noise-canvas" id="noiseCanvas"></canvas>
+  <div class="crt-bar"></div>
+  <div class="boot-logo">국가유산 시스템</div>
+  <div class="crt-text crt-flicker" id="crtText"></div>
+  <div class="crt-progress"><div class="crt-progress-bar" id="crtProgressBar"></div></div>
+</div>
+
+<script>
+// ====== 핵심 수정: 스타트업 화면 sessionStorage로 1회만 ======
+(function(){
+  const startup=document.getElementById('startup');
+  if(sessionStorage.getItem('heritage-visited')){
+    startup.style.display='none';
+  }
+})();
+
+// i18n (축약)
+const LANGS={ko:{},en:{},ja:{},zh:{}};
+let currentLang=localStorage.getItem('heritage-lang')||'ko';
+function setLang(l){currentLang=l;localStorage.setItem('heritage-lang',l);document.querySelectorAll('.lang-selector button').forEach((b,i)=>b.classList.toggle('active',['ko','en','ja','zh'][i]===l));}
+
+// Audio
+const AudioCtx=window.AudioContext||window.webkitAudioContext;
+let audioCtx;
+function initAudio(){if(!audioCtx)audioCtx=new AudioCtx()}
+function playCRTOn(){initAudio();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sawtooth';o.frequency.setValueAtTime(80,audioCtx.currentTime);o.frequency.exponentialRampToValueAtTime(2000,audioCtx.currentTime+.05);o.frequency.exponentialRampToValueAtTime(60,audioCtx.currentTime+.3);g.gain.setValueAtTime(.15,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.4);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+.4);const buf=audioCtx.createBuffer(1,audioCtx.sampleRate*.2,audioCtx.sampleRate);const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*.08;const ns=audioCtx.createBufferSource(),ng=audioCtx.createGain();ns.buffer=buf;ng.gain.setValueAtTime(.12,audioCtx.currentTime);ng.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.2);ns.connect(ng);ng.connect(audioCtx.destination);ns.start()}
+function playCRTHum(){initAudio();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.value=60;g.gain.setValueAtTime(.02,audioCtx.currentTime);o.connect(g);g.connect(audioCtx.destination);o.start();return{stop:()=>{g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.5);o.stop(audioCtx.currentTime+.5)}}}
+function playTyping(){initAudio();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='square';o.frequency.value=800+Math.random()*400;g.gain.setValueAtTime(.03,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.02);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+.02)}
+function playGaugeTick(){initAudio();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.value=1200;g.gain.setValueAtTime(.04,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.05);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+.05)}
+function playSelect(){initAudio();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.setValueAtTime(600,audioCtx.currentTime);o.frequency.exponentialRampToValueAtTime(1200,audioCtx.currentTime+.1);g.gain.setValueAtTime(.08,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.2);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+.2)}
+
+// Noise
+function startNoise(){const c=document.getElementById('noiseCanvas'),cx=c.getContext('2d');c.width=300;c.height=200;(function d(){const img=cx.createImageData(c.width,c.height);for(let i=0;i<img.data.length;i+=4){const v=Math.random()*255;img.data[i]=img.data[i+1]=img.data[i+2]=v;img.data[i+3]=255}cx.putImageData(img,0,0);requestAnimationFrame(d)})()}
+
+// CRT Loading
+async function showCRTLoading(targetUrl){
+  const overlay=document.getElementById('crtOverlay'),textEl=document.getElementById('crtText'),progBar=document.getElementById('crtProgressBar');
+  overlay.classList.add('active');startNoise();playCRTOn();const hum=playCRTHum();
+  const lines=['> HERITAGE SYSTEM v4.2.1','> Initializing display matrix...','> Loading cultural database... OK','> Calibrating sensors...','> Webcam stream: CONNECTED','> MediaPipe inference: READY','> Heritage module: '+targetUrl.split('/').pop().replace('.html','').toUpperCase(),'> All systems nominal.','> Launching experience...'];
+  textEl.innerHTML='';
+  for(let i=0;i<lines.length;i++){
+    const el=document.createElement('div');textEl.appendChild(el);
+    for(let j=0;j<lines[i].length;j++){el.textContent+=lines[i][j];playTyping();await new Promise(r=>setTimeout(r,15+Math.random()*20))}
+    el.style.opacity='1';progBar.style.width=((i+1)/lines.length*100)+'%';
+    await new Promise(r=>setTimeout(r,150+Math.random()*200));
+  }
+  await new Promise(r=>setTimeout(r,400));hum.stop();
+  overlay.style.transition='opacity 0.5s';overlay.style.opacity='0';
+  await new Promise(r=>setTimeout(r,500));window.location.href=targetUrl;
+}
+
+// Webcam + Hand
+const video=document.getElementById('webcam');
+const cursorDot=document.getElementById('cursorDot');
+let fingerPos={x:0,y:0,visible:false},hoveredCard=null,hoverStartTime=0;
+const HOVER_DURATION=2000;
+let isTransitioning=false;
+
+function isIndexPointing(lm){return lm[8].y<lm[6].y&&lm[12].y>lm[10].y&&lm[16].y>lm[14].y&&lm[20].y>lm[18].y}
+
+function onHandResults(r){
+  if(r.multiHandLandmarks&&r.multiHandLandmarks.length>0){
+    const lm=r.multiHandLandmarks[0];
+    if(isIndexPointing(lm)){
+      const tip=lm[8];fingerPos.x=(1-tip.x)*window.innerWidth;fingerPos.y=tip.y*window.innerHeight;fingerPos.visible=true;
+      cursorDot.style.display='block';cursorDot.style.left=fingerPos.x+'px';cursorDot.style.top=fingerPos.y+'px';checkCardHover();
+    }else{fingerPos.visible=false;cursorDot.style.display='none';resetHover()}
+  }else{fingerPos.visible=false;cursorDot.style.display='none';resetHover()}
+}
+
+function checkCardHover(){
+  if(isTransitioning)return;
+  let found=null;
+  document.querySelectorAll('.card').forEach(card=>{
+    const r=card.getBoundingClientRect();
+    if(fingerPos.x>=r.left&&fingerPos.x<=r.right&&fingerPos.y>=r.top&&fingerPos.y<=r.bottom)found=card;
+    else card.classList.remove('hovered');
+  });
+  if(found){
+    found.classList.add('hovered');
+    if(hoveredCard!==found){hoveredCard=found;hoverStartTime=Date.now();playGaugeTick()}
+    const progress=Math.min((Date.now()-hoverStartTime)/HOVER_DURATION,1);
+    found.querySelector('.gauge-svg').style.opacity='1';
+    found.querySelector('.fg').style.strokeDashoffset=339.292*(1-progress);
+    if(progress>=1&&!isTransitioning){isTransitioning=true;playSelect();showCRTLoading(found.dataset.page)}
+  }else resetHover();
+}
+
+function resetHover(){
+  if(hoveredCard){hoveredCard.querySelector('.gauge-svg').style.opacity='0';hoveredCard.querySelector('.fg').style.strokeDashoffset='339.292';hoveredCard.classList.remove('hovered');hoveredCard=null;hoverStartTime=0}
+}
+
+document.querySelectorAll('.card').forEach(card=>{card.addEventListener('click',()=>{if(!isTransitioning){isTransitioning=true;playSelect();showCRTLoading(card.dataset.page)}})});
+
+async function startWebcam(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:{width:1280,height:720,facingMode:'user'}});
+    video.srcObject=stream;await video.play();
+    const hands=new Hands({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/hands/'+f});
+    hands.setOptions({maxNumHands:1,modelComplexity:1,minDetectionConfidence:.7,minTrackingConfidence:.5});
+    hands.onResults(onHandResults);
+    const cam=new Camera(video,{onFrame:async()=>{if(!isTransitioning)await hands.send({image:video})},width:1280,height:720});
+    cam.start();
+    // 스타트업 화면 숨기기 + 방문 기록
+    const startup=document.getElementById('startup');
+    if(startup.style.display!=='none'){
+      startup.classList.add('hide');
+      setTimeout(()=>{startup.style.display='none'},1200);
+    }
+    sessionStorage.setItem('heritage-visited','1');
+  }catch(e){
+    console.error(e);
+    const startup=document.getElementById('startup');
+    startup.innerHTML='<h2 style="color:#C9A84C;font-family:Noto Serif KR">웹캠 접근 필요</h2><p style="color:#F5F0E8;opacity:.7;margin-top:12px">카메라 권한을 허용해주세요</p>';
+  }
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  setLang(currentLang);
+  const alreadyVisited=sessionStorage.getItem('heritage-visited');
+  setTimeout(startWebcam, alreadyVisited ? 100 : 1500);
+});
+</script>
+</body>
+</html>
